@@ -1,0 +1,46 @@
+# ==================================
+# NEXT.JS FRONTEND
+# ==================================
+magic-screen-frontend/node_modules
+magic-screen-frontend/.next
+magic-screen-frontend/out
+magic-screen-frontend/build
+
+# frontend env
+magic-screen-frontend/.env
+magic-screen-frontend/.env.local
+
+# ==================================
+# SPRING BOOT BACKEND
+# ==================================
+MagicScreenBackend/target
+MagicScreenBackend/build
+
+# jar / war
+*.jar
+*.war
+
+# Maven / Gradle
+.gradle
+.mvn
+
+# backend env
+MagicScreenBackend/.env
+
+# ==================================
+# IDE FILES
+# ==================================
+.vscode
+.idea
+*.iml
+
+# ==================================
+# OS FILES
+# ==================================
+.DS_Store
+Thumbs.db
+
+# ==================================
+# LOGS
+# ==================================
+*.log
