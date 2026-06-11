@@ -88,59 +88,22 @@ public class BookingService {
         return code.toString();
     }
 
-    @Transactional
-    public Booking submitUtrPayment(Long bookingId, String utr) {
-        // 1. Verify the UTR is exactly 12 digits long
-        if (utr == null || !utr.matches("\\d{12}")) {
-            throw new IllegalArgumentException("Invalid UPI UTR! Must be a 12-digit numeric reference number.");
-        }
-
-        // 2. Locate the booking record
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new IllegalArgumentException("Booking details not found for ID: " + bookingId));
-
-        // 3. Attach the UTR proof
-        booking.setUtr(utr);
-
-        // Note: The status stays "PENDING" here until an admin confirms the receipt manually inside their dashboard
-        return bookingRepository.save(booking);
-    }
-
-    @Transactional
-    public Booking confirmBooking(Long bookingId) {
-        // 1. Locate the pending booking record
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new IllegalArgumentException("Booking record not found for ID: " + bookingId));
-
-        // 2. Ensure we aren't trying to confirm a booking that was already cleaned up/expired
-        if ("EXPIRED".equals(booking.getStatus())) {
-            throw new IllegalStateException("Cannot confirm this booking; the 10-minute hold window has already expired.");
-        }
-
-        // 3. Update the booking status to permanent success
-        booking.setStatus("CONFIRMED");
-        // Optional safety check: Ensure payment reference exists before confirmation
-        if (booking.getUtr() == null || booking.getUtr().isBlank()) {
-            throw new IllegalStateException("Cannot confirm booking: No payment UTR has been submitted yet.");
-        }
-
-        // 4. Finalize the associated slot so it is fully locked out from the public wizard layout
-        Slot slot = booking.getSlot();
-        slot.setStatus("BOOKED");
-        slot.setHeldUntil(null); // Clear out the temporary hold timestamp anchor completely
-
-        slotRepository.save(slot);
-        Booking savedBooking = bookingRepository.save(booking);
-
-        // 5. Asynchronously hand over the saved database entity state to trigger the email notification
-        emailService.sendBookingConfirmation(savedBooking);
-
-        return savedBooking;
-    }
-
     public Booking getBookingByTrackingCode(String trackingCode) {
         return bookingRepository.findByTrackingCode(trackingCode)
                 .orElseThrow(() -> new IllegalArgumentException("No booking found with tracking code: " + trackingCode));
+    }
+    public Booking updateStatus(Long id, String status) {
+        Booking booking = bookingRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        booking.setStatus(status);
+        return bookingRepository.save(booking);
+    }
+
+    public boolean verifyPayment(Long id, String transactionId) {
+        // 1. Add logic here to talk to your Payment Gateway API (Stripe/Razorpay)
+        // to check if transactionId is actually valid.
+        // 2. Return true if payment is found and successful.
+        return true; // Simplified for now
     }
 
     public Booking save(Booking booking) {

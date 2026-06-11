@@ -15,6 +15,8 @@ public class Slot {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Column(name = "slot_name")
+    private String name;   // e.g. "Matinee Bliss", "Evening Premium"
 
     // Direct relationship link to the screen
     @ManyToOne

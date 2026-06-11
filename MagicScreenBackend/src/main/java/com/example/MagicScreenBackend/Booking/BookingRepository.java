@@ -19,12 +19,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query("SELECT b FROM Booking b WHERE b.status = 'PENDING' AND b.utr IS NULL AND b.slot.heldUntil < :now")
     List<Booking> findExpiredBookingsWithNoPayment(@Param("now") LocalDateTime now);
 
-    // Analytics Dashboard Queries
-    @Query("SELECT SUM(b.totalPrice) FROM Booking b WHERE b.status = 'CONFIRMED'")
-    BigDecimal sumTotalRevenue();
 
-    long countByStatus(String status);
 
-    @Query("SELECT b.slot.theater.name, COUNT(b) FROM Booking b WHERE b.status = 'CONFIRMED' GROUP BY b.slot.theater.name")
-    List<Object[]> countBookingsPerTheater();
 }

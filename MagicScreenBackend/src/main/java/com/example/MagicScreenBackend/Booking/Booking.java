@@ -56,6 +56,9 @@ public class Booking {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(name = "utr", length = 12)
+    @Column(name = "payment_Id", length = 50)
     private String utr; // Stores the 12-digit UPI Transaction Reference submitted by the customer
+
+    @Column(name = "razorpay_order_id")
+    private String razorpayOrderId;
 }

@@ -9,7 +9,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class MagicScreenBackendApplication {
 
 	public static void main(String[] args) {
-
 		SpringApplication.run(MagicScreenBackendApplication.class, args);
 	}
 }
