@@ -5,7 +5,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -15,10 +14,10 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     Optional<Booking> findByTrackingCode(String trackingCode);
 
-    // Restoring the cleanup sweep query for your SlotCleanupScheduler
-    @Query("SELECT b FROM Booking b WHERE b.status = 'PENDING' AND b.utr IS NULL AND b.slot.heldUntil < :now")
-    List<Booking> findExpiredBookingsWithNoPayment(@Param("now") LocalDateTime now);
+    Optional<Booking> findBySlotIdAndCustomerEmailAndStatus(Long slotId, String customerEmail, String status);
 
-
-
+    // Only expire bookings that are STILL PENDING and were created MORE than 10 minutes ago
+    // This gives customers a full 10-minute payment window before their slot is released
+    @Query("SELECT b FROM Booking b WHERE b.status = 'PENDING' AND b.createdAt < :threshold")
+    List<Booking> findExpiredPendingBookings(@Param("threshold") LocalDateTime threshold);
 }

@@ -5,6 +5,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.*;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,6 +24,12 @@ public class TelegramService {
 
     public void sendBookingAlert(Booking booking) {
         try {
+            BigDecimal totalPrice = booking.getTotalPrice();
+            BigDecimal advancePaid = booking.getAdvancePaid() != null
+                    ? booking.getAdvancePaid()
+                    : totalPrice.divide(BigDecimal.valueOf(2), 2, RoundingMode.CEILING);
+            BigDecimal balanceDue = totalPrice.subtract(advancePaid);
+
             String text = String.format(
                     "🎬 *NEW BOOKING — The Magic Screen*\n\n" +
                             "━━━━━━━━━━━━━━━━━━━━\n" +
@@ -35,7 +44,9 @@ public class TelegramService {
                             "🎉 *Occasion:* %s\n" +
                             "👥 *Guests:* %d\n" +
                             "━━━━━━━━━━━━━━━━━━━━\n" +
-                            "💰 *Total Paid:* ₹%.2f\n" +
+                            "💰 *Total Booking Amount:* ₹%.2f\n" +
+                            "✅ *Advance Paid (50%%):* ₹%.2f\n" +
+                            "🔜 *Balance Due at Venue:* ₹%.2f\n" +
                             "🔖 *Payment ID:* `%s`\n" +
                             "━━━━━━━━━━━━━━━━━━━━\n" +
                             "✅ *Payment verified and confirmed!*",
@@ -49,7 +60,9 @@ public class TelegramService {
                     booking.getSlot().getEndTime().toString(),
                     booking.getOccasion().getName(),
                     booking.getTotalGuests(),
-                    booking.getTotalPrice(),
+                    totalPrice,
+                    advancePaid,
+                    balanceDue,
                     booking.getUtr() != null ? booking.getUtr() : "N/A"
             );
 
@@ -68,7 +81,6 @@ public class TelegramService {
 
             System.out.println("Telegram alert sent successfully.");
         } catch (Exception e) {
-            // Never crash the booking flow if Telegram fails
             System.err.println("Telegram notification failed: " + e.getMessage());
         }
     }

@@ -61,4 +61,7 @@ public class Booking {
 
     @Column(name = "razorpay_order_id")
     private String razorpayOrderId;
+
+    @Column(name = "advance_paid")
+    private BigDecimal advancePaid;
 }

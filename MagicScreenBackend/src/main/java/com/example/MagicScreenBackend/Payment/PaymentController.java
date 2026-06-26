@@ -4,12 +4,14 @@ import com.example.MagicScreenBackend.Booking.Booking;
 import com.example.MagicScreenBackend.Booking.BookingRepository;
 import com.example.MagicScreenBackend.Booking.BookingService;
 import com.example.MagicScreenBackend.Email.EmailService;
-import com.example.MagicScreenBackend.Notification.TelegramService;   // ← changed
+import com.example.MagicScreenBackend.Notification.TelegramService;
 import com.razorpay.RazorpayException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Map;
 
 @RestController
@@ -21,28 +23,42 @@ public class PaymentController {
     private final BookingRepository bookingRepository;
     private final BookingService bookingService;
     private final EmailService emailService;
-    private final TelegramService telegramService;   // ← changed
+    private final TelegramService telegramService;
 
     @PostMapping("/create-order/{bookingId}")
     public ResponseEntity<?> createOrder(@PathVariable Long bookingId) {
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new IllegalArgumentException("Booking not found"));
-
         try {
-            String razorpayOrderId = razorpayService.createOrder(booking.getTotalPrice());
+            Booking booking = bookingRepository.findById(bookingId)
+                    .orElseThrow(() -> new IllegalArgumentException("Booking not found with ID: " + bookingId));
+
+            // Calculate 50% advance from the grand total (already patched by frontend)
+            BigDecimal totalPrice = booking.getTotalPrice();
+            if (totalPrice == null || totalPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                return ResponseEntity.status(400).body(Map.of("error", "Invalid booking total price."));
+            }
+
+            BigDecimal advanceAmount = totalPrice.divide(BigDecimal.valueOf(2), 2, RoundingMode.CEILING);
+
+            String razorpayOrderId = razorpayService.createOrder(advanceAmount);
             booking.setRazorpayOrderId(razorpayOrderId);
+            booking.setAdvancePaid(advanceAmount);
             bookingRepository.save(booking);
 
             return ResponseEntity.ok(Map.of(
                     "razorpayOrderId", razorpayOrderId,
-                    "amount", booking.getTotalPrice(),
+                    "amount", advanceAmount,
                     "keyId", razorpayService.getKeyId(),
                     "customerName", booking.getCustomerName(),
                     "customerEmail", booking.getCustomerEmail(),
                     "customerPhone", booking.getCustomerPhone()
             ));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
         } catch (RazorpayException e) {
-            return ResponseEntity.status(500).body(Map.of("error", "Failed to create payment order: " + e.getMessage()));
+            return ResponseEntity.status(500).body(Map.of("error", "Razorpay order creation failed: " + e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Unexpected error: " + e.getMessage()));
         }
     }
 
@@ -51,38 +67,49 @@ public class PaymentController {
             @PathVariable Long bookingId,
             @RequestBody Map<String, String> body) {
 
-        String razorpayOrderId   = body.get("razorpayOrderId");
-        String razorpayPaymentId = body.get("razorpayPaymentId");
-        String razorpaySignature = body.get("razorpaySignature");
+        try {
+            String razorpayOrderId = body.get("razorpayOrderId");
+            String razorpayPaymentId = body.get("razorpayPaymentId");
+            String razorpaySignature = body.get("razorpaySignature");
 
-        boolean isValid = razorpayService.verifySignature(razorpayOrderId, razorpayPaymentId, razorpaySignature);
+            if (razorpayOrderId == null || razorpayPaymentId == null || razorpaySignature == null) {
+                return ResponseEntity.status(400).body(Map.of("error", "Missing payment verification fields."));
+            }
 
-        if (!isValid) {
-            return ResponseEntity.status(400).body(
-                    Map.of("error", "Payment signature verification failed.")
-            );
+            boolean isValid = razorpayService.verifySignature(razorpayOrderId, razorpayPaymentId, razorpaySignature);
+
+            if (!isValid) {
+                return ResponseEntity.status(400).body(Map.of("error", "Payment signature verification failed."));
+            }
+
+            Booking booking = bookingRepository.findById(bookingId)
+                    .orElseThrow(() -> new IllegalArgumentException("Booking not found"));
+
+            booking.setStatus("CONFIRMED");
+            booking.setUtr(razorpayPaymentId);
+            booking.getSlot().setStatus("BOOKED");
+            booking.getSlot().setHeldUntil(null);
+
+            Booking saved = bookingRepository.save(booking);
+
+            // Fire-and-forget email and telegram — don't let these crash the response
+            try { emailService.sendBookingConfirmation(saved); } catch (Exception e) {
+                System.err.println("Email failed: " + e.getMessage());
+            }
+            try { telegramService.sendBookingAlert(saved); } catch (Exception e) {
+                System.err.println("Telegram failed: " + e.getMessage());
+            }
+
+            return ResponseEntity.ok(Map.of(
+                    "status", "CONFIRMED",
+                    "trackingCode", saved.getTrackingCode(),
+                    "message", "Payment verified and booking confirmed!"
+            ));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Verification failed: " + e.getMessage()));
         }
-
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new IllegalArgumentException("Booking not found"));
-
-        booking.setStatus("CONFIRMED");
-        booking.setUtr(razorpayPaymentId);
-        booking.getSlot().setStatus("BOOKED");
-        booking.getSlot().setHeldUntil(null);
-
-        Booking saved = bookingRepository.save(booking);
-
-        // Send confirmation email to customer
-        emailService.sendBookingConfirmation(saved);
-
-        // Send Telegram alert to theater owner
-        telegramService.sendBookingAlert(saved);   // ← changed
-
-        return ResponseEntity.ok(Map.of(
-                "status", "CONFIRMED",
-                "trackingCode", saved.getTrackingCode(),
-                "message", "Payment verified and booking confirmed!"
-        ));
     }
 }

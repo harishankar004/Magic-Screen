@@ -61,20 +61,28 @@ public class DataSeeder {
                 System.out.println("✅ Seeded 6 occasions");
             }
 
-            // ── THEATER ───────────────────────────────────────────
+            // ── THEATERS (all 4 matching the frontend) ────────────
             if (theaterRepo.count() == 0) {
-                Theater t = new Theater();
-                t.setName("Grand Royal Screen 1");
-                t.setTheme("Luxury Gold");
-                t.setBaseCapacity(2);
-                t.setMaxCapacity(10);
-                t.setBasePrice(new BigDecimal("3499"));
-                t.setExtraPerHead(new BigDecimal("500"));
-                t.setDurationHours(3);
-                t.setDescription("Ultra-premium private cinema experience.");
-                t.setIsActive(true);
-                theaterRepo.save(t);
-                System.out.println("✅ Seeded 1 theater (ID will be 1)");
+                Object[][] theaters = {
+                        {"Blue",          "Classic Cinema",   4,  10, "799",  "150", 3, "120 inch 4K screen. Up to 4 guests included."},
+                        {"Gold",          "Gold Premium",     4,  10, "999",  "150", 3, "133 inch 4K screen. Most popular choice."},
+                        {"Red Love",      "Romantic Suite",   2,  2,  "1199", "0",   3, "120 inch 4K screen. Couple only private suite."},
+                        {"Jail Dark Cell","Dark Experience",  4,  10, "1399", "150", 3, "133 inch 4K immersive dark cell experience."},
+                };
+                for (Object[] t : theaters) {
+                    Theater theater = new Theater();
+                    theater.setName((String) t[0]);
+                    theater.setTheme((String) t[1]);
+                    theater.setBaseCapacity((Integer) t[2]);
+                    theater.setMaxCapacity((Integer) t[3]);
+                    theater.setBasePrice(new BigDecimal((String) t[4]));
+                    theater.setExtraPerHead(new BigDecimal((String) t[5]));
+                    theater.setDurationHours((Integer) t[6]);
+                    theater.setDescription((String) t[7]);
+                    theater.setIsActive(true);
+                    theaterRepo.save(theater);
+                }
+                System.out.println("✅ Seeded 4 theaters");
             }
 
             // ── SLOTS for next 7 days ─────────────────────────────

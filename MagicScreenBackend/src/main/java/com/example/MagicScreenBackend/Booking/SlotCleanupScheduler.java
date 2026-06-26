@@ -13,38 +13,41 @@ import java.util.List;
 
 @Component
 @RequiredArgsConstructor
-@Slf4j // Provides clean log outputs directly to your IntelliJ terminal window
+@Slf4j
 public class SlotCleanupScheduler {
 
     private final BookingRepository bookingRepository;
     private final SlotRepository slotRepository;
 
-    // Runs automatically every 60,000 milliseconds (1 minute)
+    // Runs every 60 seconds
     @Scheduled(fixedRate = 60000)
     @Transactional
     public void releaseExpiredTheaterSlots() {
-        LocalDateTime now = LocalDateTime.now();
 
-        // 1. Fetch all bookings that have run out of time without a UTR
-        List<Booking> expiredCheckouts = bookingRepository.findExpiredBookingsWithNoPayment(now);
+        // Only expire bookings created MORE THAN 10 minutes ago with no payment
+        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
+
+        List<Booking> expiredCheckouts = bookingRepository.findExpiredPendingBookings(tenMinutesAgo);
 
         if (!expiredCheckouts.isEmpty()) {
-            log.info("Found {} abandoned checkouts. Commencing cache release...", expiredCheckouts.size());
+            log.info("Found {} abandoned checkouts past 10-min window. Releasing slots...", expiredCheckouts.size());
 
             for (Booking booking : expiredCheckouts) {
-                // 2. Mark the Booking record as EXPIRED
                 booking.setStatus("EXPIRED");
 
-                // 3. Re-open the slot for the public view
                 Slot slot = booking.getSlot();
-                slot.setStatus("AVAILABLE");
-                slot.setHeldUntil(null); // Clear the expiration lock anchor
+                // Only release if still HELD — never touch a BOOKED slot
+                if ("HELD".equals(slot.getStatus())) {
+                    slot.setStatus("AVAILABLE");
+                    slot.setHeldUntil(null);
+                    slotRepository.save(slot);
+                    log.info("Released slot ID {} back to AVAILABLE", slot.getId());
+                }
 
-                slotRepository.save(slot);
                 bookingRepository.save(booking);
             }
 
-            log.info("Successfully cleaned up expired hold registers.");
+            log.info("Cleanup complete — {} slots released.", expiredCheckouts.size());
         }
     }
 }
