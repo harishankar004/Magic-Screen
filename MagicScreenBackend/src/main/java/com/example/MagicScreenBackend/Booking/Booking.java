@@ -2,6 +2,7 @@ package com.example.MagicScreenBackend.Booking;
 
 import com.example.MagicScreenBackend.Occasion.Occasion;
 import com.example.MagicScreenBackend.Slot.Slot;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.math.BigDecimal;
@@ -18,13 +19,14 @@ public class Booking {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Change this from @OneToOne to @ManyToOne
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "slot_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "bookings"})
     private Slot slot;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "occasion_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Occasion occasion;
 
     @Column(name = "customer_name", nullable = false)
@@ -40,10 +42,10 @@ public class Booking {
     private Integer totalGuests;
 
     @Column(name = "tracking_code", nullable = false, unique = true)
-    private String trackingCode; // e.g., MSB-7A9X2K
+    private String trackingCode;
 
     @Column(nullable = false)
-    private String status = "PENDING"; // PENDING, CONFIRMED, EXPIRED
+    private String status = "PENDING";
 
     @Column(name = "total_price", nullable = false)
     private BigDecimal totalPrice;
@@ -57,7 +59,7 @@ public class Booking {
     private LocalDateTime updatedAt;
 
     @Column(name = "payment_Id", length = 50)
-    private String utr; // Stores the 12-digit UPI Transaction Reference submitted by the customer
+    private String utr;
 
     @Column(name = "razorpay_order_id")
     private String razorpayOrderId;

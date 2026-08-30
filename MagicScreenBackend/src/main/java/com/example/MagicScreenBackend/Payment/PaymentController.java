@@ -29,17 +29,16 @@ public class PaymentController {
     public ResponseEntity<?> createOrder(@PathVariable Long bookingId) {
         try {
             Booking booking = bookingRepository.findById(bookingId)
-                    .orElseThrow(() -> new IllegalArgumentException("Booking not found with ID: " + bookingId));
+                    .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + bookingId));
 
-            // Calculate 50% advance from the grand total (already patched by frontend)
             BigDecimal totalPrice = booking.getTotalPrice();
             if (totalPrice == null || totalPrice.compareTo(BigDecimal.ZERO) <= 0) {
                 return ResponseEntity.status(400).body(Map.of("error", "Invalid booking total price."));
             }
 
             BigDecimal advanceAmount = totalPrice.divide(BigDecimal.valueOf(2), 2, RoundingMode.CEILING);
-
             String razorpayOrderId = razorpayService.createOrder(advanceAmount);
+
             booking.setRazorpayOrderId(razorpayOrderId);
             booking.setAdvancePaid(advanceAmount);
             bookingRepository.save(booking);
@@ -68,7 +67,7 @@ public class PaymentController {
             @RequestBody Map<String, String> body) {
 
         try {
-            String razorpayOrderId = body.get("razorpayOrderId");
+            String razorpayOrderId   = body.get("razorpayOrderId");
             String razorpayPaymentId = body.get("razorpayPaymentId");
             String razorpaySignature = body.get("razorpaySignature");
 
@@ -77,7 +76,6 @@ public class PaymentController {
             }
 
             boolean isValid = razorpayService.verifySignature(razorpayOrderId, razorpayPaymentId, razorpaySignature);
-
             if (!isValid) {
                 return ResponseEntity.status(400).body(Map.of("error", "Payment signature verification failed."));
             }
@@ -89,20 +87,31 @@ public class PaymentController {
             booking.setUtr(razorpayPaymentId);
             booking.getSlot().setStatus("BOOKED");
             booking.getSlot().setHeldUntil(null);
+            bookingRepository.save(booking);
 
-            Booking saved = bookingRepository.save(booking);
+            // CRITICAL: Reload booking fresh from DB so all EAGER relations
+            // (slot → theater, occasion) are fully initialized before email/telegram
+            Booking confirmedBooking = bookingRepository.findById(bookingId)
+                    .orElseThrow(() -> new IllegalArgumentException("Booking not found after save"));
 
-            // Fire-and-forget email and telegram — don't let these crash the response
-            try { emailService.sendBookingConfirmation(saved); } catch (Exception e) {
-                System.err.println("Email failed: " + e.getMessage());
+            // Send email — wrapped so it never crashes the payment response
+            try {
+                emailService.sendBookingConfirmation(confirmedBooking);
+            } catch (Exception e) {
+                System.err.println("❌ Email failed: " + e.getMessage());
+                e.printStackTrace();
             }
-            try { telegramService.sendBookingAlert(saved); } catch (Exception e) {
-                System.err.println("Telegram failed: " + e.getMessage());
+
+            // Send Telegram alert
+            try {
+                telegramService.sendBookingAlert(confirmedBooking);
+            } catch (Exception e) {
+                System.err.println("❌ Telegram failed: " + e.getMessage());
             }
 
             return ResponseEntity.ok(Map.of(
                     "status", "CONFIRMED",
-                    "trackingCode", saved.getTrackingCode(),
+                    "trackingCode", confirmedBooking.getTrackingCode(),
                     "message", "Payment verified and booking confirmed!"
             ));
 

@@ -19,56 +19,139 @@ public class EmailService {
 
     public void sendBookingConfirmation(Booking booking) {
         try {
+            if (booking == null) {
+                System.err.println("❌ Email skipped — booking is null");
+                return;
+            }
+            if (booking.getCustomerEmail() == null || booking.getCustomerEmail().isBlank()) {
+                System.err.println("❌ Email skipped — customer email is empty");
+                return;
+            }
+
+            System.out.println("📧 Sending email to: " + booking.getCustomerEmail());
+
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
+            helper.setFrom("themagicscreen18@gmail.com");
             helper.setTo(booking.getCustomerEmail());
-            helper.setSubject("Your Magic Screen Booking is Confirmed! " + booking.getTrackingCode());
+            helper.setSubject("✅ Booking Confirmed — " + booking.getTrackingCode() + " | The Magic Screen");
 
-            BigDecimal totalPrice = booking.getTotalPrice();
-            BigDecimal advancePaid = totalPrice.divide(BigDecimal.valueOf(2), 2, RoundingMode.CEILING);
-            BigDecimal balanceDue = totalPrice.subtract(advancePaid);
+            // Safely extract slot/theater/occasion — all EAGER loaded now
+            String theaterName  = "—";
+            String slotDate     = "—";
+            String slotTime     = "—";
+            String slotEndTime  = "—";
+            String occasionName = "—";
 
-            String emailContent = String.format(
-                    "<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0D0D0D;color:#fff;padding:32px;border-radius:16px'>" +
-                            "<h1 style='color:#D4A017;margin-bottom:4px'>The Magic Screen</h1>" +
-                            "<p style='color:#888;margin-top:0'>Private Cinema Experience · Bhadurpally, Hyderabad</p>" +
-                            "<hr style='border-color:#333;margin:24px 0'/>" +
-                            "<h2 style='color:#fff'>Booking Confirmed!</h2>" +
-                            "<p style='color:#aaa'>Your private theater slot has been confirmed. Please find your booking details below.</p>" +
-                            "<div style='background:#1A1A1A;border-radius:12px;padding:20px;margin:20px 0'>" +
-                            "<p style='margin:8px 0;color:#888'>Tracking Code: <strong style='color:#D4A017;font-size:18px'>%s</strong></p>" +
-                            "<p style='margin:8px 0;color:#888'>Theater Screen: <strong style='color:#fff'>%s</strong></p>" +
-                            "<p style='margin:8px 0;color:#888'>Date: <strong style='color:#fff'>%s</strong></p>" +
-                            "<p style='margin:8px 0;color:#888'>Time Slot: <strong style='color:#fff'>%s</strong></p>" +
-                            "<p style='margin:8px 0;color:#888'>Total Guests: <strong style='color:#fff'>%d</strong></p>" +
+            if (booking.getSlot() != null) {
+                if (booking.getSlot().getTheater() != null) {
+                    theaterName = booking.getSlot().getTheater().getName();
+                }
+                if (booking.getSlot().getSlotDate() != null) {
+                    slotDate = booking.getSlot().getSlotDate().toString();
+                }
+                if (booking.getSlot().getStartTime() != null) {
+                    slotTime = booking.getSlot().getStartTime().toString();
+                }
+                if (booking.getSlot().getEndTime() != null) {
+                    slotEndTime = booking.getSlot().getEndTime().toString();
+                }
+            }
+
+            if (booking.getOccasion() != null) {
+                occasionName = booking.getOccasion().getName();
+            }
+
+            BigDecimal totalPrice  = booking.getTotalPrice() != null ? booking.getTotalPrice() : BigDecimal.ZERO;
+            BigDecimal advancePaid = booking.getAdvancePaid() != null
+                    ? booking.getAdvancePaid()
+                    : totalPrice.divide(BigDecimal.valueOf(2), 2, RoundingMode.CEILING);
+            BigDecimal balanceDue  = totalPrice.subtract(advancePaid);
+
+            String html =
+                    "<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0D0D0D;color:#ffffff;padding:32px;border-radius:16px;border:1px solid #222'>" +
+
+                            // Header
+                            "<div style='text-align:center;padding-bottom:24px;border-bottom:1px solid #222;margin-bottom:24px'>" +
+                            "<h1 style='color:#D4A017;margin:0;font-size:26px;letter-spacing:1px'>🎬 THE MAGIC SCREEN</h1>" +
+                            "<p style='color:#888;margin:6px 0 0;font-size:13px'>Private Cinema Experience · Bhadurpally, Hyderabad</p>" +
                             "</div>" +
-                            "<div style='background:#1A1A1A;border-radius:12px;padding:20px;margin:20px 0;border:1px solid #D4A017/30'>" +
-                            "<h3 style='color:#D4A017;margin-top:0'>Payment Summary</h3>" +
-                            "<p style='margin:8px 0;color:#888'>Total Booking Amount: <strong style='color:#fff'>₹%.2f</strong></p>" +
-                            "<p style='margin:8px 0;color:#4CAF50'>Advance Paid (50%%): <strong style='color:#4CAF50'>₹%.2f</strong></p>" +
-                            "<p style='margin:8px 0;color:#888'>Balance Due at Venue: <strong style='color:#D4A017'>₹%.2f</strong></p>" +
-                            "</div>" +
-                            "<p style='color:#555;font-size:12px;margin-top:24px'>Please present this email at the counter on arrival. The remaining balance is to be paid at the venue before your screening begins.</p>" +
-                            "<hr style='border-color:#333;margin:24px 0'/>" +
-                            "<p style='color:#555;font-size:12px'>The Magic Screen · 123 Cinema Lane · Bhadurpally, Hyderabad · themagicscreen18@gmail.com</p>" +
-                            "</div>",
-                    booking.getTrackingCode(),
-                    booking.getSlot().getTheater().getName(),
-                    booking.getSlot().getSlotDate().toString(),
-                    booking.getSlot().getStartTime().toString(),
-                    booking.getTotalGuests(),
-                    totalPrice,
-                    advancePaid,
-                    balanceDue
-            );
 
-            helper.setText(emailContent, true);
+                            // Confirmed banner
+                            "<div style='background:#D4A017;border-radius:10px;padding:16px 20px;margin-bottom:24px;text-align:center'>" +
+                            "<h2 style='color:#000;margin:0;font-size:20px'>✅ Booking Confirmed!</h2>" +
+                            "<p style='color:#333;margin:4px 0 0;font-size:13px'>Your private theater experience is all set.</p>" +
+                            "</div>" +
+
+                            // Tracking code
+                            "<div style='text-align:center;margin-bottom:24px'>" +
+                            "<p style='color:#888;font-size:12px;margin:0'>TRACKING CODE</p>" +
+                            "<p style='color:#D4A017;font-size:28px;font-weight:bold;font-family:monospace;margin:4px 0'>" + booking.getTrackingCode() + "</p>" +
+                            "<p style='color:#555;font-size:11px;margin:0'>Keep this safe — you will need it at the venue</p>" +
+                            "</div>" +
+
+                            // Booking details
+                            "<div style='background:#1A1A1A;border-radius:12px;padding:20px;margin-bottom:16px'>" +
+                            "<h3 style='color:#D4A017;margin:0 0 14px;font-size:14px;text-transform:uppercase;letter-spacing:1px'>📋 Booking Details</h3>" +
+                            row("Theater Screen", theaterName) +
+                            row("Date", slotDate) +
+                            row("Time Slot", slotTime + " → " + slotEndTime) +
+                            row("Occasion", occasionName) +
+                            row("Total Guests", String.valueOf(booking.getTotalGuests())) +
+                            row("Customer Name", booking.getCustomerName()) +
+                            row("Phone", booking.getCustomerPhone()) +
+                            "</div>" +
+
+                            // Payment
+                            "<div style='background:#1A1A1A;border-radius:12px;padding:20px;margin-bottom:16px'>" +
+                            "<h3 style='color:#D4A017;margin:0 0 14px;font-size:14px;text-transform:uppercase;letter-spacing:1px'>💳 Payment Summary</h3>" +
+                            row("Total Booking Amount", "₹" + String.format("%.2f", totalPrice)) +
+                            rowColored("✅ Advance Paid (50%)", "₹" + String.format("%.2f", advancePaid), "#4CAF50") +
+                            rowColored("⏳ Balance Due at Venue", "₹" + String.format("%.2f", balanceDue), "#D4A017") +
+                            "</div>" +
+
+                            // Note
+                            "<div style='background:#111;border-radius:10px;padding:14px 16px;border-left:3px solid #D4A017;margin-bottom:24px'>" +
+                            "<p style='color:#888;font-size:12px;margin:0;line-height:1.7'>" +
+                            "📌 Please show this email at the reception upon arrival. " +
+                            "The remaining balance of <strong style='color:#D4A017'>₹" + String.format("%.2f", balanceDue) + "</strong> " +
+                            "is to be paid at the venue before your screening begins." +
+                            "</p>" +
+                            "</div>" +
+
+                            // Footer
+                            "<div style='text-align:center;border-top:1px solid #222;padding-top:20px'>" +
+                            "<p style='color:#555;font-size:11px;margin:0'>The Magic Screen · Bhadurpally, Hyderabad</p>" +
+                            "<p style='color:#555;font-size:11px;margin:4px 0 0'>📧 themagicscreen18@gmail.com</p>" +
+                            "</div>" +
+
+                            "</div>";
+
+            helper.setText(html, true);
             mailSender.send(message);
-            System.out.println("Confirmation email sent to: " + booking.getCustomerEmail());
+            System.out.println("✅ Email sent successfully to: " + booking.getCustomerEmail());
 
         } catch (MessagingException e) {
-            System.err.println("Failed to send confirmation email: " + e.getMessage());
+            System.err.println("❌ MessagingException sending email: " + e.getMessage());
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.err.println("❌ Unexpected error sending email: " + e.getMessage());
+            e.printStackTrace();
         }
+    }
+
+    private String row(String label, String value) {
+        return "<div style='display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222'>" +
+                "<span style='color:#888;font-size:13px'>" + label + "</span>" +
+                "<span style='color:#fff;font-size:13px;font-weight:bold'>" + (value != null ? value : "—") + "</span>" +
+                "</div>";
+    }
+
+    private String rowColored(String label, String value, String color) {
+        return "<div style='display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222'>" +
+                "<span style='color:" + color + ";font-size:13px'>" + label + "</span>" +
+                "<span style='color:" + color + ";font-size:13px;font-weight:bold'>" + (value != null ? value : "—") + "</span>" +
+                "</div>";
     }
 }
